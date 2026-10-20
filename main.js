@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const manager = new THREE.LoadingManager();
 
@@ -17,21 +18,32 @@ loading.style.display = 'flex';
 camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.01, 20000 );
 camera.position.set( -2, 2, 0 );
 scene = new THREE.Scene();
-scene.background = new THREE.Color( 0xa0a0a0 );
-const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 1 );
+scene.background = new THREE.Color( 0xc5ced6 );
+
+// Cool sky and warm ground bounce, kept dim so albedo is not washed out.
+const hemiLight = new THREE.HemisphereLight( 0xd6e6ff, 0x8a7358, 0.45 );
 hemiLight.position.set( 0, 20, 0 );
 scene.add( hemiLight );
-const dirLight = new THREE.DirectionalLight( 0xffffff, 2 );
-const ambiantLight = new THREE.AmbientLight(0xffffff, 1);
-ambiantLight.position.set(0, -20, 0);
-scene.add( ambiantLight )
-dirLight.position.set( 0, 50, 10 );
+
+// Slightly warm key light, like daylight.
+const dirLight = new THREE.DirectionalLight( 0xfff5e8, Math.PI );
+dirLight.position.set( 6, 14, 8 );
 dirLight.castShadow = true;
-dirLight.shadow.camera.top = 1.8;
-dirLight.shadow.camera.bottom = - 1.0;
-dirLight.shadow.camera.left = - 1.2;
-dirLight.shadow.camera.right = 1.2;
+dirLight.shadow.mapSize.set( 2048, 2048 );
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 40;
+dirLight.shadow.camera.top = 6;
+dirLight.shadow.camera.bottom = -6;
+dirLight.shadow.camera.left = -6;
+dirLight.shadow.camera.right = 6;
+dirLight.shadow.bias = -0.0004;
+dirLight.shadow.normalBias = 0.02;
 scene.add( dirLight );
+
+// Cool fill from the opposite side so shadowed faces keep their color.
+const fillLight = new THREE.DirectionalLight( 0xc5d4ea, 0.55 );
+fillLight.position.set( -8, 6, -6 );
+scene.add( fillLight );
 
 const mesh = new THREE.Mesh( new THREE.PlaneGeometry( 20, 20 ), new THREE.MeshPhongMaterial( { color: 0x999999, depthWrite: false } ) );
 mesh.rotation.x = - Math.PI / 2;
@@ -65,8 +77,18 @@ loadAsset();
 renderer = new THREE.WebGLRenderer( { antialias: true } );
 renderer.setPixelRatio( window.devicePixelRatio );
 renderer.setSize( window.innerWidth, window.innerHeight );
-renderer.setAnimationLoop( animate );
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const pmremGenerator = new THREE.PMREMGenerator( renderer );
+scene.environment = pmremGenerator.fromScene( new RoomEnvironment(), 0.04 ).texture;
+scene.environmentIntensity = 0.8;
+pmremGenerator.dispose();
+
+renderer.setAnimationLoop( animate );
 container.appendChild( renderer.domElement );
 
 const controls = new OrbitControls( camera, renderer.domElement );
@@ -75,15 +97,15 @@ controls.update();
 window.addEventListener( 'resize', onWindowResize );
 
 function loadAsset() {
-    loader.load( '/models/01.glb', function ( gltf ) {
+    loader.load( '/models/drone.glb', function ( gltf ) {
         const model = gltf.scene;
         console.log(model);
         model.scale.set(1, 1, 1)
         model.position.set(0, 0.2, 0);
-        // rotor1 = model.children[0].children[1].children[0].children[4].children[0].children[1].children[0].children[0].children[0];
-        // rotor2 = model.children[0].children[1].children[0].children[4].children[0].children[1].children[1].children[0].children[0];
-        // rotor3 = model.children[0].children[1].children[0].children[8].children[0].children[1].children[0].children[0].children[0];
-        // rotor4 =model.children[0].children[1].children[0].children[8].children[0].children[1].children[1].children[0].children[0];
+        rotor1 = model.children[0].children[1].children[0].children[4].children[0].children[1].children[0].children[0].children[0];
+        rotor2 = model.children[0].children[1].children[0].children[4].children[0].children[1].children[1].children[0].children[0];
+        rotor3 = model.children[0].children[1].children[0].children[8].children[0].children[1].children[0].children[0].children[0];
+        rotor4 =model.children[0].children[1].children[0].children[8].children[0].children[1].children[1].children[0].children[0];
         // ETH = 0x7bff0ea1Ad81fC2043f44Ee3Dba571f5107fF8F5
         // Sol = Avn9Rx3PXZLwmCBFJj9AyDjMWutxL7hUrrZ9KyoD7BAQ
         scene.add( model );
@@ -105,6 +127,7 @@ let x1, x2, x3, x4;
 let y1, y2, y3, y4;
 
 function animate() {
+    console.log("isplay = ", isPlay);
     if (rotor1 && isPlay) {
         const angle = index * 1.7;
         rotor1.rotation.z = angle;
